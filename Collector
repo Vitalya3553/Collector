@@ -1,0 +1,88 @@
+class Collector(
+    private val setOfRequireKeys : Set<String>,
+    private val collectorMode : CollectorMode = CollectorMode.DEFAULT,
+    private val cullBack : (Map<String,Any?>) -> Unit,
+    ){
+    enum class CollectorMode{
+        DEFAULT,TESTING,
+    }
+
+    private val resultMap = mutableMapOf<String,Any?>()
+    private val listOfUnusedKeys = setOfRequireKeys.toMutableList()
+
+    //TESTING VALUES
+    private lateinit var boostTimer : Timer
+    private var milliseconds : Long = 0
+    private var delayList = mutableListOf<Long>()
+
+    init {
+        if (collectorMode == CollectorMode.TESTING){
+            boostTimer = Timer()
+            boostTimer.schedule(object : TimerTask() {
+                override fun run() {
+                    milliseconds += 10
+                }
+            }, 0, 10)
+        }
+    }
+
+    fun sendData(key: String,value: Any?){
+        if(listOfUnusedKeys.contains(key))
+            listOfUnusedKeys.remove(key)
+
+        resultMap[key] = value
+
+        if (collectorMode== CollectorMode.TESTING) {
+            delayList.add(milliseconds)
+            Log.e("Collector","Send data: key =$key, value =$value. With time milSec:$milliseconds")
+        }
+
+        checkIfMustToDoCullBack(listOfUnusedKeys.size)
+    }
+
+    fun removeData(key: String){
+        if(setOfRequireKeys.contains(key) && !setOfRequireKeys.contains(key))
+            listOfUnusedKeys.add(key)
+        resultMap.remove(key)
+    }
+
+    fun getCurrentCollectedData(): MutableMap<String, Any?> {
+        return resultMap
+    }
+
+    fun stopNotFinishedTimeCollect(){
+        if (collectorMode == CollectorMode.TESTING){
+            boostTimer.cancel()
+        }
+    }
+
+    private fun checkIfMustToDoCullBack(unusedKeysCount : Int){
+        if (unusedKeysCount <=0){
+            if (collectorMode== CollectorMode.TESTING){
+               pushTestLogs()
+            }
+
+            cullBack(resultMap)
+        }
+    }
+
+    private fun pushTestLogs(){
+        val resultTimeMilliseconds = milliseconds
+        var totalTimeMilliseconds = 0L
+
+        boostTimer.cancel()
+
+        delayList.map {
+            totalTimeMilliseconds += it
+        }
+        val savedTime = totalTimeMilliseconds - resultTimeMilliseconds
+        val boostPercent = 100 - (100f*resultTimeMilliseconds/totalTimeMilliseconds)
+        val timeFaster = totalTimeMilliseconds/resultTimeMilliseconds.toFloat()
+
+        Log.e("Collector","Collect time :$resultTimeMilliseconds mSec")
+        Log.e("Collector","Time without collector would be like:$totalTimeMilliseconds mSec")
+        Log.e("Collector","Time saved:$savedTime mSec")
+        Log.e("Collector","Boost percent:$boostPercent%")
+        Log.e("Collector","it's $timeFaster times faster")
+    }
+}
